@@ -10,6 +10,7 @@ import Search from './search/page'
 export default function Home() {
   const [showSearch, setShowSearch] = useState(false);
 
+
   if (showSearch) {
     return <Search/>;
   }
