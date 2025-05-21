@@ -1,21 +1,17 @@
-from fastapi import FastAPI, BackgroundTasks
-import httpx
 import asyncio
-import os
-import json
-from typing import List, Dict, Optional
-import random
 import logging
+from contextlib import asynccontextmanager
+
+from collector import collect_images_task, is_collector_running
+from fastapi import BackgroundTasks, Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes import routes
+from models import create_tables
+from routes import router
 
-app = FastAPI(title="HueView")
+logging.basicConfig(level=logging.INFO, 
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
-
-IMAGES_LIMIT = 1000
-images_collected = 0
-is_collector_running = False
-image_data = []
 
 THEMES = {
     "places": [
@@ -34,6 +30,33 @@ THEMES = {
     ]
 }
 
+
+
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    create_tables()
+    logger.info("Starting application and background tasks")
+    task = asyncio.create_task(collect_images_task())
+    
+    yield
+    
+    import collector
+    collector.is_collector_running = False
+    
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        logger.info("Scraper has been cancelled")
+    
+    
+    
+    
+    
+app = FastAPI(title="HueView",lifespan=lifespan)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -42,4 +65,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(routes.router)
+app.include_router(router)
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+    
